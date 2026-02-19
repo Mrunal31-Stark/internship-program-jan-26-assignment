@@ -1355,7 +1355,6 @@ By combining GenAI for intelligent field detection with deterministic rendering 
 
 This design ensures both scalability and real-world usability.
 
-```
 
 ## Problem 4: Architecture Proposal for 5-Min Character Video Series Generator
 
