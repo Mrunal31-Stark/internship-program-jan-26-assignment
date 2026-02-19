@@ -1809,7 +1809,6 @@ sequenceDiagram
 
 ---
 
-# 10. Evaluation Criteria Coverage
 
 ## Architecture Clarity
 
