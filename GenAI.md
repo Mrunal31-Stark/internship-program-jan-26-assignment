@@ -26,7 +26,427 @@ No code required. We want a **clear, practical proposal** with architecture and 
 
 ### Your Solution for problem 1:
 
-You need to put your solution here.
+Input:
+Folder with long videos (3–4 hours, 200MB+ each)
+
+Output (per video):
+
+output/<video_name>/
+   Summary.md
+   clips/
+   screenshots/
+
+
+Constraints:
+
+Batch mode
+
+Timestamp-aligned clips & screenshots
+
+5–10 minute readable summary
+
+Scales to many long videos
+
+Approach 1 — Online / Cloud-Based (Already Available Solutions)
+
+Examples:
+
+OpenAI (Whisper + GPT + Assistants)
+
+Google Cloud (Speech-to-Text + Vertex AI)
+
+AssemblyAI
+
+Descript
+
+ Architecture
+Local Folder
+   ↓
+Upload to Cloud Storage (S3 / GCS)
+   ↓
+Cloud Transcription (Whisper / STT API)
+   ↓
+LLM Summarization + Highlight Detection
+   ↓
+Timestamp Extraction
+   ↓
+Return JSON Summary Spec
+   ↓
+Local FFmpeg Processing
+   ↓
+Generate Summary.md + Assets
+
+✔ Strengths
+
+Highest transcription accuracy
+
+Fast scaling
+
+Minimal infra maintenance
+
+Built-in diarization, topic segmentation
+
+Production-ready reliability
+
+ Weaknesses
+
+Expensive for long videos
+
+Data privacy risk
+
+Upload time for 200MB+ files
+
+Rate limits for batch jobs
+
+ JSON Output Schema (Cloud LLM Contract)
+{
+  "video_metadata": {
+    "filename": "string",
+    "duration_seconds": 0,
+    "processed_at": "ISO8601"
+  },
+  "high_level_summary": "string",
+  "highlights": [
+    {
+      "title": "string",
+      "start_timestamp": "HH:MM:SS",
+      "end_timestamp": "HH:MM:SS",
+      "description": "string",
+      "importance_score": 0.0,
+      "confidence_score": 0.0
+    }
+  ],
+  "key_takeaways": [
+    "string"
+  ],
+  "uncertain_sections": [
+    {
+      "reason": "string",
+      "timestamp": "HH:MM:SS"
+    }
+  ]
+}
+
+
+✔ Deterministic
+✔ Forces timestamps
+✔ Confidence scoring
+✔ Ambiguity surfaced
+
+ Prompt Strategy (Zero-Shot, Low Hallucination)
+
+System Prompt:
+
+You are a factual video summarization engine.
+Use only the provided transcript segments.
+Do not invent content not present in the transcript.
+Output strictly valid JSON according to schema.
+If uncertain, mark in "uncertain_sections".
+
+Why this works:
+
+Forces grounding
+
+Prevents hallucinated highlights
+
+Encourages uncertainty reporting
+
+Best For
+
+Enterprise
+
+Fast deployment
+
+Accuracy > cost
+
+ Approach 2 — Hybrid (Local Media + Cloud LLM APIs)
+
+This is likely the most practical balance.
+
+Architecture
+Batch Folder
+   ↓
+Local Processing (FFmpeg chunking)
+   ↓
+Local Transcription (Whisper small/medium)
+   ↓
+Segmented Transcript (5–10 min chunks)
+   ↓
+Cloud LLM (Summarize + Highlight Selection)
+   ↓
+Highlight JSON Spec
+   ↓
+Local Clip + Screenshot Extraction
+   ↓
+Markdown Generator
+
+ Key Design Principle
+
+Do NOT send full 4-hour transcript at once.
+
+Instead:
+
+Chunk transcript by time (e.g., 5 minutes)
+
+Summarize per chunk
+
+Aggregate summaries
+
+Final compression pass
+
+This reduces:
+
+Token overflow
+
+Cost
+
+Hallucination risk
+
+ Improved JSON Schema (Production-Ready)
+{
+  "version": "1.0",
+  "video": {
+    "filename": "string",
+    "duration_seconds": 0
+  },
+  "processing": {
+    "transcript_model": "string",
+    "llm_model": "string",
+    "processed_at": "ISO8601"
+  },
+  "summary": {
+    "high_level": "string",
+    "reading_time_minutes": 0
+  },
+  "highlights": [
+    {
+      "id": "HL_001",
+      "start_sec": 0,
+      "end_sec": 0,
+      "title": "string",
+      "description": "string",
+      "keywords": ["string"],
+      "confidence": 0.0
+    }
+  ],
+  "takeaways": ["string"],
+  "review_required": false
+}
+
+
+✔ Numeric timestamps (less parsing errors)
+✔ Versioning
+✔ Traceability
+✔ Model tracking
+✔ Review flag
+
+Ambiguity Handling Strategy
+
+LLM instructed to:
+
+Mark low-confidence highlights (<0.6)
+
+Avoid summarizing unclear segments
+
+Flag audio quality issues
+
+User review flow:
+
+If review_required = true
+   → user inspects only flagged highlights
+   → approve / delete / edit
+
+
+Scales well for bulk processing.
+
+Error Handling (Batch Mode Thinking)
+
+Per video:
+
+Transcription failure → skip + log
+
+LLM timeout → retry 2 times
+
+Invalid JSON → auto-repair prompt
+
+Asset extraction mismatch → re-cut using raw timestamps
+
+Generate:
+
+output/report.json
+
+{
+  "total_videos": 20,
+  "successful": 18,
+  "failed": 2,
+  "average_processing_time_min": 14.2
+}
+
+✔ Strengths
+
+Balanced cost
+
+Good privacy
+
+High accuracy
+
+Scalable
+
+Robust batch control
+
+Weaknesses
+
+Some API dependency
+
+Needs orchestration logic
+
+ Approach 3 — Fully Offline (Open Source Only)
+
+Components:
+
+Whisper (local)
+
+LLaMA
+
+Mistral
+
+FFmpeg
+
+Orchestration script
+
+Architecture
+Video Folder
+   ↓
+Local GPU Transcription (Whisper large-v3)
+   ↓
+Semantic Segmentation (Embedding clustering)
+   ↓
+Local LLM Summarization
+   ↓
+Highlight Scoring
+   ↓
+Clip + Screenshot Extraction
+   ↓
+Markdown Assembly
+
+⚠ Critical Reality
+
+Offline LLMs:
+
+Lower summarization quality
+
+More hallucination risk
+
+Need more prompt engineering
+
+Slower
+
+But:
+
+✔ Zero data leaves system
+✔ One-time infra cost
+✔ Unlimited scale
+
+📦 Schema (Same as Hybrid)
+
+Important design decision:
+Keep schema identical across all approaches
+
+This ensures:
+
+Replaceable backend
+
+Comparable output
+
+Easy benchmarking
+
+📊 Performance Consideration
+
+For 4-hour video:
+
+Whisper large-v3 → 1–2× real-time on good GPU
+
+LLaMA 8B summarization → slow on CPU
+
+Requires 16–32GB RAM minimum
+
+ Side-by-Side Comparison
+Factor	Cloud	Hybrid	Offline
+Accuracy	⭐⭐⭐⭐	⭐⭐⭐⭐	⭐⭐⭐
+Cost	High	Medium	Low (after infra)
+Privacy	Low	Medium	High
+Setup	Easy	Moderate	Complex
+Batch reliability	High	High	Medium
+Hallucination control	Good	Very Good	Harder
+Long-term scalability	API-bound	Flexible	Hardware-bound
+ Recommended Approach
+
+For practical deployment:
+
+👉 Hybrid Approach
+
+Because:
+
+Scales
+
+Lower hallucination risk
+
+Controlled cost
+
+Local heavy lifting
+
+Clean review workflow
+
+Clear asset alignment
+
+📘 Markdown Template (Deterministic)
+# Video Summary
+
+## Metadata
+- Filename:
+- Duration:
+- Processed:
+
+## High-Level Summary
+
+(150–250 words)
+
+## Key Highlights
+
+### [00:15:32 – 00:22:10] Title
+Description
+Clip: clips/HL_001.mp4
+Screenshot: screenshots/HL_001.jpg
+
+## Key Takeaways
+
+- Bullet
+- Bullet
+- Bullet
+
+
+Readable in 5–10 minutes.
+
+🚀 Final Architecture Recommendation (Production-Grade)
+Orchestrator (Batch Runner)
+   ├── Transcription Engine
+   ├── Chunk Processor
+   ├── LLM Highlight Engine
+   ├── Validation Layer
+   ├── Asset Extractor
+   ├── Markdown Builder
+   └── Batch Report Generator
+
+
+Add:
+
+Logging
+
+Retry system
+
+Confidence scoring
+
+JSON validation before clip cutting
 
 ## Problem 2: **Zero-Shot Prompt to generate 3 LinkedIn Post**
 
